@@ -125,6 +125,15 @@ function connect() {
   ws.onmessage = ({ data }) => {
     const msg = JSON.parse(data);
     if (msg.type === 'text') {
+      // Update last user message with transcription if available
+      if (msg.transcription) {
+        const userMsgs = messagesDiv.querySelectorAll('.msg.user');
+        const lastUserMsg = userMsgs[userMsgs.length - 1];
+        if (lastUserMsg) {
+          const meta = lastUserMsg.querySelector('.meta');
+          lastUserMsg.innerHTML = `${msg.transcription}${meta ? meta.outerHTML : ''}`;
+        }
+      }
       addMessage('assistant', msg.text, `LLM: ${msg.llm_time}s`);
     } else if (msg.type === 'audio') {
       if (ignoreIncomingAudio) {

@@ -24,8 +24,9 @@ MODEL_PATH = os.environ.get(
 )
 SYSTEM_PROMPT = (
     "You are a friendly, conversational AI assistant. The user is talking to you "
-    "through a microphone and showing you their camera. Respond naturally and "
-    "concisely in 1-3 short sentences. Be direct and conversational."
+    "through a microphone and showing you their camera. "
+    "You MUST always use the respond_to_user tool to reply. "
+    "First transcribe exactly what the user said, then write your response."
 )
 
 app = FastAPI()
@@ -81,8 +82,24 @@ async def root():
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
+
+    # Per-connection tool state captured via closure
+    tool_result = {}
+
+    def respond_to_user(transcription: str, response: str) -> str:
+        """Respond to the user's voice message.
+
+        Args:
+            transcription: Exact transcription of what the user said in the audio.
+            response: Your conversational response to the user. Keep it to 1-4 short sentences.
+        """
+        tool_result["transcription"] = transcription
+        tool_result["response"] = response
+        return "OK"
+
     conversation = engine.create_conversation(
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}]
+        messages=[{"role": "system", "content": SYSTEM_PROMPT}],
+        tools=[respond_to_user],
     )
     conversation.__enter__()
 
@@ -138,18 +155,31 @@ async def websocket_endpoint(ws: WebSocket):
 
                 # LLM inference
                 t0 = time.time()
+                tool_result.clear()
                 response = await asyncio.get_event_loop().run_in_executor(
                     None, lambda: conversation.send_message({"role": "user", "content": content})
                 )
-                text_response = response["content"][0]["text"]
                 llm_time = time.time() - t0
-                print(f"LLM ({llm_time:.2f}s): {text_response}")
+
+                # Extract response from tool call or fallback to raw text
+                if tool_result:
+                    strip = lambda s: s.replace('<|"|>', "").strip()
+                    transcription = strip(tool_result.get("transcription", ""))
+                    text_response = strip(tool_result.get("response", ""))
+                    print(f"LLM ({llm_time:.2f}s) [tool] heard: {transcription!r} → {text_response}")
+                else:
+                    transcription = None
+                    text_response = response["content"][0]["text"]
+                    print(f"LLM ({llm_time:.2f}s) [no tool]: {text_response}")
 
                 if interrupted.is_set():
                     print("Interrupted after LLM, skipping response")
                     continue
 
-                await ws.send_text(json.dumps({"type": "text", "text": text_response, "llm_time": round(llm_time, 2)}))
+                reply = {"type": "text", "text": text_response, "llm_time": round(llm_time, 2)}
+                if transcription:
+                    reply["transcription"] = transcription
+                await ws.send_text(json.dumps(reply))
 
                 if interrupted.is_set():
                     print("Interrupted before TTS, skipping audio")
