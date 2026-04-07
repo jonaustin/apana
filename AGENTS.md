@@ -9,7 +9,6 @@ bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --claim  # Claim work atomically
 bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
 ```
 
 ## Non-Interactive Shell Commands
@@ -55,30 +54,28 @@ bd close <id>         # Complete work
 - Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
 - Run `bd prime` for detailed command reference and session close protocol
 - Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+- This repo uses embedded `bd` in local-only mode; do not run `bd dolt push` unless a Dolt remote is explicitly configured later
+- Embedded `bd` is single-writer; avoid overlapping mutating `bd` commands from multiple agents or shells
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**When ending a work session**, complete the local workflow below.
 
-**MANDATORY WORKFLOW:**
+**LOCAL WORKFLOW:**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **Review local git state**:
    ```bash
-   git pull --rebase
-   bd dolt push
-   git push
-   git status  # MUST show "up to date with origin"
+   git status
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
+5. **Commit intentionally when appropriate** - Keep local commits focused and descriptive
+6. **Publish only when asked** - If Sir Jolly Roger asks to publish work, use a feature branch and PR workflow; do not push `main`
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+- Do not treat `git push` as required for local completion in this repo
+- Do not run `bd dolt push` in this repo unless a Dolt remote is intentionally configured
+- If publishing is requested, never push directly to `main`; use a feature branch and PR
 <!-- END BEADS INTEGRATION -->
