@@ -39,6 +39,7 @@ SYSTEM_PROMPT = (
 )
 
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
+CHINESE_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?。！？])')
 
 engine = None
 tts_backend = None
@@ -68,10 +69,70 @@ async def lifespan(app):
 app = FastAPI(lifespan=lifespan)
 
 
-def split_sentences(text: str) -> list[str]:
-    """Split text into sentences for streaming TTS."""
-    parts = SENTENCE_SPLIT_RE.split(text.strip())
+def split_sentences(text: str, include_chinese: bool = True) -> list[str]:
+    """Split text into sentences for streaming TTS.
+
+    Args:
+        text: Text to split into sentences.
+        include_chinese: If True, also split on Chinese punctuation (.!?).
+
+    Returns:
+        List of sentence strings, stripped of whitespace.
+    """
+    if include_chinese:
+        # Split on both Western and Chinese punctuation
+        parts = CHINESE_SENTENCE_SPLIT_RE.split(text.strip())
+    else:
+        parts = SENTENCE_SPLIT_RE.split(text.strip())
     return [s.strip() for s in parts if s.strip()]
+
+
+def normalize_lesson_payload(tool_result: dict) -> dict:
+    """Normalize tool output into a stable lesson payload.
+
+    Args:
+        tool_result: Raw tool result dict with transcription, response, and optional lesson fields.
+
+    Returns:
+        Normalized dict with text, transcription, and lesson keys.
+    """
+    # Extract base fields
+    transcription = tool_result.get("transcription", "")
+    text = tool_result.get("response", "")
+
+    # Extract lesson fields if present
+    lesson = {}
+    if "english_coaching" in tool_result:
+        lesson = {
+            "english_coaching": tool_result.get("english_coaching", ""),
+            "mandarin_text": tool_result.get("mandarin_text", ""),
+            "pinyin": tool_result.get("pinyin", ""),
+            "meaning": tool_result.get("meaning", ""),
+            "pronunciation_tip": tool_result.get("pronunciation_tip", ""),
+            "repeat_prompt": tool_result.get("repeat_prompt", ""),
+            "speech_text": tool_result.get("speech_text", ""),
+        }
+
+    return {
+        "text": text,
+        "transcription": transcription,
+        "lesson": lesson if lesson else None,
+    }
+
+
+def select_speech_text(lesson: dict | None, fallback_text: str) -> str:
+    """Select the text to send to TTS.
+
+    Args:
+        lesson: Normalized lesson payload (may be None).
+        fallback_text: Fallback text if no lesson or speech_text.
+
+    Returns:
+        Text string to send to TTS.
+    """
+    if lesson and lesson.get("speech_text"):
+        return lesson["speech_text"]
+    return fallback_text
 
 
 @app.get("/")
