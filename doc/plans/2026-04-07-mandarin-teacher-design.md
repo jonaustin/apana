@@ -28,10 +28,11 @@ The main gap is that the current system is optimized for a generic assistant, no
 
 ### Non-Functional
 
+- Do not rely on cloud inference, cloud STT, or cloud TTS services.
 - Preserve low-latency interaction.
 - Avoid turning each turn into a long spoken monologue.
 - Make the lesson format visually clear in the transcript UI.
-- Do not rely on cloud STT or TTS services.
+- Local browser-side assets may still be fetched normally; the privacy boundary is around model inference and speech processing.
 
 ## Recommended Approach
 
@@ -67,11 +68,24 @@ The backend should evolve from a single `response` string into structured tutor 
 - `english_coaching`
 - `mandarin_text`
 - `pinyin`
+- `meaning`
 - `pronunciation_tip`
 - `repeat_prompt`
 - `transcription`
+- `speech_text`
 
-The tutor may omit some optional fields on simple turns, but beginner lesson turns should consistently separate what to say, how to pronounce it, and what it means.
+The intended meaning of these fields should be explicit:
+
+- `english_coaching`: short teaching explanation in English
+- `mandarin_text`: the exact Mandarin phrase the learner should see
+- `pinyin`: pinyin for the Mandarin phrase
+- `meaning`: concise English gloss or translation
+- `pronunciation_tip`: plain-English coaching on tones or mouth shape
+- `repeat_prompt`: short repetition instruction for the learner
+- `transcription`: exact transcription of what the user said
+- `speech_text`: the exact text that should be sent to TTS for this turn
+
+The tutor may omit some optional fields on simple turns, but beginner lesson turns should consistently separate what to say, how to pronounce it, what it means, and what should actually be spoken.
 
 This structure will make the system more reliable than relying on raw prompt formatting, and it will let the frontend present lessons clearly.
 
@@ -80,6 +94,8 @@ This structure will make the system more reliable than relying on raw prompt for
 Pronunciation is the product, so the speech layer should be treated as a first-class subsystem rather than a transparent post-processing step.
 
 The current `tts.py` abstraction is a good place to introduce a Mandarin-aware backend interface. The app should be able to choose a Mandarin-capable local speech backend without changing the rest of the websocket flow.
+
+The speech layer should be validated before the full UI migration. A small manual phrase set should be used to determine whether the current local Mandarin-capable backend is credible enough to proceed.
 
 Speech behavior should follow these rules:
 
@@ -111,9 +127,11 @@ The websocket flow in `server.py` should remain the backbone of the app. The mai
 
 - replace the system prompt
 - update the response tool contract to support structured tutor output
+- keep the existing user transcription transport reliable during rollout, even if the tutor payload grows
 - serialize structured lesson fields to the frontend
-- synthesize the Mandarin-specific speech field instead of the whole reply
+- synthesize the Mandarin-specific `speech_text` field instead of speaking the whole reply
 - expand sentence splitting to include Chinese punctuation such as `。`, `！`, and `？`
+- preserve a compatibility fallback so the app can still render a plain text assistant message if the tool call or schema output is incomplete
 
 This keeps the architecture simple and minimizes risk to the real-time interaction loop.
 
@@ -125,6 +143,7 @@ Testing should cover three areas.
 
 - Verify the tutor consistently produces beginner-safe output.
 - Verify new Mandarin content includes pinyin.
+- Verify new Mandarin teaching turns include `meaning` and `speech_text`.
 - Verify response length stays short enough for real-time voice interaction.
 
 ### Streaming and UX
@@ -132,12 +151,20 @@ Testing should cover three areas.
 - Verify Chinese punctuation splits correctly for streamed playback.
 - Verify assistant cards render cleanly in the transcript.
 - Verify playback interruption still works correctly when the user barges in.
+- Verify the UI still renders a reasonable plain-text fallback if structured tutor fields are missing.
+
+### Rollout Compatibility
+
+- Verify the backend still handles both tool-call output and raw-text fallback safely during migration.
+- Verify missing optional schema fields do not break websocket payload handling.
+- Verify legacy transcript updates for user transcription still work while assistant cards become structured.
 
 ### Pronunciation Quality
 
 - Create a small Mandarin phrase regression set.
 - Run manual listening checks on the local machine.
 - Validate that slow playback still sounds natural enough for instruction.
+- Gate broader implementation on this check; if the local speech path is not credible, do not continue with UI-heavy changes.
 
 Automated tests can cover formatting and transport behavior, but pronunciation quality requires deliberate human listening.
 
@@ -153,10 +180,10 @@ The highest-risk item is speech quality, so that should be validated early.
 
 Implementation should proceed in this order:
 
-1. update the tutor prompt and tool contract
-2. make the frontend render structured lesson fields
+1. validate a local Mandarin-capable speech path on a small phrase set
+2. update the tutor prompt and tool contract, including `meaning` and `speech_text`
 3. update speech selection and sentence splitting for Mandarin-aware playback
-4. validate pronunciation quality on a small phrase set
+4. make the frontend render structured lesson fields while preserving plain-text fallback behavior
 5. tune pacing and wording for beginner lessons
 
-This order reduces wasted work because it validates the product-critical speech path before polish.
+This order reduces wasted work because it validates the product-critical speech path before deeper frontend work and keeps the rollout compatible with the current text-based transport.
