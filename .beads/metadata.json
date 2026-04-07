@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "apana",
+  "project_id": "248315fa-cbc5-400f-924f-9a7ec457d8ea"
+}
