@@ -1,7 +1,7 @@
 """Mandarin phrase fixtures for TTS benchmark validation."""
 
 # Basic greetings and common phrases
-# Format: (characters, pinyin, english_meaning)
+# Format: dict with text, pinyin, meaning keys
 
 MANDARIN_PHRASES = {
     "ni_hao": {
