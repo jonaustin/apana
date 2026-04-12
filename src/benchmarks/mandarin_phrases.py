@@ -45,7 +45,7 @@ MANDARIN_PHRASES = {
 MANDARIN_TEXT_SET = {
     "short": "你好",
     "medium": "谢谢，再见",
-    "long": "我叫... 请再说一次 很高兴认识你",
+    "long": "我叫小明，请再说一次，很高兴认识你",
 }
 
 # Recommended voice for Mandarin (Kokoro ONNX uses zf_ voices)

@@ -50,6 +50,7 @@ def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
     text_set = MANDARIN_TEXT_SET if mandarin else SENTENCES
     voice = MANDARIN_VOICE if mandarin else VOICE
     speed = MANDARIN_SPEED if mandarin else SPEED
+    lang_code = "zh-cn" if mandarin else "en-us"  # 'en-us'=English, 'zh-cn'=Mandarin
 
     # Validate fixtures are loaded
     if mandarin and (text_set is None or len(text_set) == 0):
@@ -59,7 +60,7 @@ def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
     for label, text in text_set.items():
         # Warmup
         for _ in range(WARMUP):
-            tts.create(text, voice=voice, speed=speed)
+            tts.create(text, voice=voice, speed=speed, lang=lang_code, is_phonemes=False)
 
         # Timed runs
         times = []
@@ -67,7 +68,7 @@ def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
         pcm_sample = None
         for run_idx in range(RUNS):
             t0 = time.time()
-            pcm, sr = tts.create(text, voice=voice, speed=speed)
+            pcm, sr = tts.create(text, voice=voice, speed=speed, lang=lang_code, is_phonemes=False)
             elapsed = time.time() - t0
             times.append(elapsed)
             audio_duration = len(pcm) / sr
@@ -85,7 +86,7 @@ def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
                 wf.setnchannels(1)
                 wf.setsampwidth(2)  # 16-bit
                 wf.setframerate(sr)
-                wf.writeframes(pcm.tobytes())
+                wf.writeframes((pcm * 32767).astype(np.int16).tobytes())
             print(f"  Saved: {output_path}")
 
         results[label] = {
@@ -163,7 +164,7 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
                 wf.setnchannels(1)
                 wf.setsampwidth(2)  # 16-bit
                 wf.setframerate(sr)
-                wf.writeframes(pcm.astype(np.int16).tobytes())
+                wf.writeframes((pcm * 32767).astype(np.int16).tobytes())
             print(f"  Saved: {output_path}")
 
         results[label] = {
@@ -179,7 +180,7 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
     return results
 
 
-def benchmark_mlx_audio_streaming(mandarin=False, output_dir=None):
+def benchmark_mlx_audio_streaming(mandarin=False):
     """Benchmark mlx-audio streaming: time-to-first-chunk on long text."""
     from mlx_audio.tts.generate import load_model
 
@@ -326,7 +327,7 @@ if __name__ == "__main__":
         mlx_results = benchmark_mlx_audio(mandarin=mandarin, output_dir=output_dir)
         print_results("mlx-audio (MLX, Apple GPU)", mlx_results, text_set=text_set, phrases=MANDARIN_PHRASES)
 
-        streaming_results = benchmark_mlx_audio_streaming(mandarin=mandarin, output_dir=output_dir)
+        streaming_results = benchmark_mlx_audio_streaming(mandarin=mandarin)
         print_streaming_results(streaming_results, text_set=text_set)
 
         # Comparison
