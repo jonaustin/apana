@@ -20,9 +20,9 @@ MANDARIN_PHRASES = {
         "meaning": "Goodbye",
     },
     "wo_jiao": {
-        "text": "我叫...",
-        "pinyin": "wǒ jiào ...",
-        "meaning": "My name is ...",
+        "text": "我叫小明",
+        "pinyin": "wǒ jiào xiǎo míng",
+        "meaning": "My name is Xiao Ming",
     },
     "qing_zai_shuo": {
         "text": "请再说一次",

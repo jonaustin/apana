@@ -34,9 +34,21 @@ except ImportError:
 
 
 def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
-    """Benchmark kokoro-onnx (ONNX Runtime, CPU)."""
+    """Benchmark kokoro-onnx (ONNX Runtime, CPU).
+
+    Note: kokoro-onnx only supports English (en-us/en-gb). Mandarin mode is not
+    supported because the underlying espeak-ng phonemizer does not have Chinese
+    language support. Passing lang='zh-cn' will produce garbage audio.
+    """
     import kokoro_onnx
     from huggingface_hub import hf_hub_download
+
+    if mandarin:
+        raise RuntimeError(
+            "kokoro-onnx does not support Mandarin. "
+            "kokoro-onnx uses espeak-ng for phonemization, which only supports en-us/en-gb. "
+            "For Mandarin TTS benchmarking, use mlx-audio only."
+        )
 
     model_path = hf_hub_download("fastrtc/kokoro-onnx", "kokoro-v1.0.onnx")
     voices_path = hf_hub_download("fastrtc/kokoro-onnx", "voices-v1.0.bin")
@@ -46,15 +58,11 @@ def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
     tts = kokoro_onnx.Kokoro(model_path, voices_path)
     print(f"  Loaded in {time.time() - t0:.2f}s")
 
-    # Choose text set based on mode
-    text_set = MANDARIN_TEXT_SET if mandarin else SENTENCES
-    voice = MANDARIN_VOICE if mandarin else VOICE
-    speed = MANDARIN_SPEED if mandarin else SPEED
-    lang_code = "zh-cn" if mandarin else "en-us"  # 'en-us'=English, 'zh-cn'=Mandarin
-
-    # Validate fixtures are loaded
-    if mandarin and (text_set is None or len(text_set) == 0):
-        raise RuntimeError("Mandarin mode requested but MANDARIN_TEXT_SET is empty. Check that mandarin_phrases.py is available.")
+    # kokoro-onnx only supports English
+    text_set = SENTENCES
+    voice = VOICE
+    speed = SPEED
+    lang_code = "en-us"
 
     results = {}
     for label, text in text_set.items():
@@ -330,15 +338,16 @@ if __name__ == "__main__":
         streaming_results = benchmark_mlx_audio_streaming(mandarin=mandarin)
         print_streaming_results(streaming_results, text_set=text_set)
 
-        # Comparison
-        print(f"\n{'=' * 60}")
-        print(f"  Comparison: speedup of mlx-audio over kokoro-onnx")
-        print(f"{'=' * 60}")
-        for label in (text_set or SENTENCES):
-            onnx_mean = onnx_results[label]["mean"]
-            mlx_mean = mlx_results[label]["mean"]
-            speedup = onnx_mean / mlx_mean
-            print(f"  [{label}]  {onnx_mean*1000:.0f}ms -> {mlx_mean*1000:.0f}ms  ({speedup:.2f}x {'faster' if speedup > 1 else 'slower'})")
+        # Comparison (only if both backends ran)
+        if is_apple:
+            print(f"\n{'=' * 60}")
+            print(f"  Comparison: speedup of mlx-audio over kokoro-onnx")
+            print(f"{'=' * 60}")
+            for label in (text_set or SENTENCES):
+                onnx_mean = onnx_results[label]["mean"]
+                mlx_mean = mlx_results[label]["mean"]
+                speedup = onnx_mean / mlx_mean
+                print(f"  [{label}]  {onnx_mean*1000:.0f}ms -> {mlx_mean*1000:.0f}ms  ({speedup:.2f}x {'faster' if speedup > 1 else 'slower'})")
 
         # Go/No-Go Gate for Mandarin
         if mandarin:

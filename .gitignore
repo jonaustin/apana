@@ -30,3 +30,5 @@ fixes-tts-wav/
 
 # Claude Code settings (developer-specific)
 .claude/settings.local.json
+# bd worktree
+tts-fixes/
