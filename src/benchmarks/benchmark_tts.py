@@ -7,6 +7,17 @@ import statistics
 import wave
 import numpy as np
 
+
+def _get_config(mandarin: bool):
+    """Get configuration based on mode.
+
+    Returns tuple of (text_set, voice, speed, lang_code).
+    """
+    if mandarin:
+        return (MANDARIN_TEXT_SET, MANDARIN_VOICE, MANDARIN_SPEED, "z")
+    return (SENTENCES, VOICE, SPEED, "a")
+
+
 # Test sentences of varying length
 SENTENCES = {
     "short": "Hello, how are you doing today?",
@@ -126,15 +137,7 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
     list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
     print(f"  Loaded in {time.time() - t0:.2f}s (sample_rate={sr})")
 
-    # Choose text set based on mode
-    text_set = MANDARIN_TEXT_SET if mandarin else SENTENCES
-    voice = MANDARIN_VOICE if mandarin else VOICE
-    speed = MANDARIN_SPEED if mandarin else SPEED
-    lang_code = "z" if mandarin else "a"  # 'a'=English, 'z'=Mandarin
-
-    # Validate fixtures are loaded
-    if mandarin and (text_set is None or len(text_set) == 0):
-        raise RuntimeError("Mandarin mode requested but MANDARIN_TEXT_SET is empty. Check that mandarin_phrases.py is available.")
+    text_set, voice, speed, lang_code = _get_config(mandarin)
 
     results = {}
     for label, text in text_set.items():
@@ -199,18 +202,10 @@ def benchmark_mlx_audio_streaming(mandarin=False):
     warmup_text = "Hello" if not mandarin else "你好"
     warmup_voice = VOICE if not mandarin else MANDARIN_VOICE
     warmup_speed = SPEED if not mandarin else MANDARIN_SPEED
-    warmup_lang = "a" if not mandarin else "z"  # 'a'=English, 'z'=Mandarin
+    warmup_lang = "a" if not mandarin else "z"
     list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
 
-    # Choose text set based on mode
-    text_set = MANDARIN_TEXT_SET if mandarin else SENTENCES
-    voice = MANDARIN_VOICE if mandarin else VOICE
-    speed = MANDARIN_SPEED if mandarin else SPEED
-    lang_code = "z" if mandarin else "a"  # 'a'=English, 'z'=Mandarin
-
-    # Validate fixtures are loaded
-    if mandarin and (text_set is None or len(text_set) == 0):
-        raise RuntimeError("Mandarin mode requested but MANDARIN_TEXT_SET is empty. Check that mandarin_phrases.py is available.")
+    text_set, voice, speed, lang_code = _get_config(mandarin)
 
     results = {}
     for label, text in text_set.items():
