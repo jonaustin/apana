@@ -48,8 +48,8 @@ MANDARIN_TEXT_SET = {
     "long": "我叫... 请再说一次 很高兴认识你",
 }
 
-# Recommended voice for Mandarin (Kokoro supports zh-CN)
-MANDARIN_VOICE = "zh"
+# Recommended voice for Mandarin (Kokoro ONNX uses zf_ voices)
+MANDARIN_VOICE = "zf_xiaoyi"
 
 # Recommended speed for beginner learners (slower is clearer)
 MANDARIN_SPEED = 0.9
