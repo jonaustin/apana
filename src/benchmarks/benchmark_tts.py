@@ -26,7 +26,11 @@ WARMUP = 2
 RUNS = 5
 
 # Mandarin phrases for TTS validation
-from .mandarin_phrases import MANDARIN_PHRASES, MANDARIN_TEXT_SET, MANDARIN_VOICE, MANDARIN_SPEED
+try:
+    from .mandarin_phrases import MANDARIN_PHRASES, MANDARIN_TEXT_SET, MANDARIN_VOICE, MANDARIN_SPEED
+except ImportError:
+    # Fallback for when run as script (python benchmark_tts.py)
+    from mandarin_phrases import MANDARIN_PHRASES, MANDARIN_TEXT_SET, MANDARIN_VOICE, MANDARIN_SPEED
 
 
 def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
@@ -109,13 +113,15 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
     warmup_text = "Hello" if not mandarin else "你好"
     warmup_voice = VOICE if not mandarin else MANDARIN_VOICE
     warmup_speed = SPEED if not mandarin else MANDARIN_SPEED
-    list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed))
+    warmup_lang = "a" if not mandarin else "z"  # 'a'=English, 'z'=Mandarin
+    list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
     print(f"  Loaded in {time.time() - t0:.2f}s (sample_rate={sr})")
 
     # Choose text set based on mode
     text_set = MANDARIN_TEXT_SET if mandarin else SENTENCES
     voice = MANDARIN_VOICE if mandarin else VOICE
     speed = MANDARIN_SPEED if mandarin else SPEED
+    lang_code = "z" if mandarin else "a"  # 'a'=English, 'z'=Mandarin
 
     # Validate fixtures are loaded
     if mandarin and (text_set is None or len(text_set) == 0):
@@ -125,7 +131,7 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
     for label, text in text_set.items():
         # Warmup
         for _ in range(WARMUP):
-            list(model.generate(text=text, voice=voice, speed=speed))
+            list(model.generate(text=text, voice=voice, speed=speed, lang_code=lang_code))
 
         # Timed runs
         times = []
@@ -133,7 +139,7 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
         pcm_sample = None
         for run_idx in range(RUNS):
             t0 = time.time()
-            gen_results = list(model.generate(text=text, voice=voice, speed=speed))
+            gen_results = list(model.generate(text=text, voice=voice, speed=speed, lang_code=lang_code))
             elapsed = time.time() - t0
             times.append(elapsed)
 
@@ -184,12 +190,14 @@ def benchmark_mlx_audio_streaming(mandarin=False, output_dir=None):
     warmup_text = "Hello" if not mandarin else "你好"
     warmup_voice = VOICE if not mandarin else MANDARIN_VOICE
     warmup_speed = SPEED if not mandarin else MANDARIN_SPEED
-    list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed))
+    warmup_lang = "a" if not mandarin else "z"  # 'a'=English, 'z'=Mandarin
+    list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
 
     # Choose text set based on mode
     text_set = MANDARIN_TEXT_SET if mandarin else SENTENCES
     voice = MANDARIN_VOICE if mandarin else VOICE
     speed = MANDARIN_SPEED if mandarin else SPEED
+    lang_code = "z" if mandarin else "a"  # 'a'=English, 'z'=Mandarin
 
     # Validate fixtures are loaded
     if mandarin and (text_set is None or len(text_set) == 0):
@@ -199,7 +207,7 @@ def benchmark_mlx_audio_streaming(mandarin=False, output_dir=None):
     for label, text in text_set.items():
         # Warmup streaming
         for _ in range(WARMUP):
-            first_chunk = next(model.generate(text=text, voice=voice, speed=speed, stream=True, streaming_interval=1.0), None)
+            first_chunk = next(model.generate(text=text, voice=voice, speed=speed, stream=True, streaming_interval=1.0, lang_code=lang_code), None)
             if first_chunk is None and mandarin:
                 raise RuntimeError(f"Streaming backend produced no chunks for label='{label}', voice='{voice}'.")
 
@@ -210,7 +218,7 @@ def benchmark_mlx_audio_streaming(mandarin=False, output_dir=None):
             t0 = time.time()
             first = True
             n_chunks = 0
-            for r in model.generate(text=text, voice=voice, speed=speed, stream=True, streaming_interval=1.0):
+            for r in model.generate(text=text, voice=voice, speed=speed, stream=True, streaming_interval=1.0, lang_code=lang_code):
                 if first:
                     ttfc_times.append(time.time() - t0)
                     first = False

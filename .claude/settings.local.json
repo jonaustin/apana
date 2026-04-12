@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr:*)",
+      "Bash(codex exec:*)",
+      "Bash(bd show:*)",
+      "Bash(bd list:*)",
+      "Bash(codex review:*)",
+      "mcp__codebase-memory-mcp__index_repository",
+      "mcp__codebase-memory-mcp__get_code_snippet",
+      "mcp__codebase-memory-mcp__search_graph",
+      "Bash(python src/benchmarks/benchmark_tts.py)",
+      "Bash(python benchmark_tts.py)",
+      "Bash(uv add:*)",
+      "Bash(uv run python -c ':*)"
+    ]
+  }
+}
