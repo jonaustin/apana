@@ -333,16 +333,21 @@ if __name__ == "__main__":
         streaming_results = benchmark_mlx_audio_streaming(mandarin=mandarin)
         print_streaming_results(streaming_results, text_set=text_set)
 
-        # Comparison (only if both backends ran)
-        if is_apple:
+        # Comparison (only for English mode - kokoro-onnx doesn't support Mandarin)
+        if not mandarin:
             print(f"\n{'=' * 60}")
             print(f"  Comparison: speedup of mlx-audio over kokoro-onnx")
             print(f"{'=' * 60}")
-            for label in (text_set or SENTENCES):
+            for label in SENTENCES:
                 onnx_mean = onnx_results[label]["mean"]
                 mlx_mean = mlx_results[label]["mean"]
                 speedup = onnx_mean / mlx_mean
                 print(f"  [{label}]  {onnx_mean*1000:.0f}ms -> {mlx_mean*1000:.0f}ms  ({speedup:.2f}x {'faster' if speedup > 1 else 'slower'})")
+        else:
+            print(f"\n{'=' * 60}")
+            print(f"  Note: kokoro-onnx does not support Mandarin (espeak-ng only supports en-us/en-gb)")
+            print(f"  Only mlx-audio results shown above for Mandarin mode.")
+            print(f"{'=' * 60}")
 
         # Go/No-Go Gate for Mandarin
         if mandarin:
