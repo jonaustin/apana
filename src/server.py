@@ -105,17 +105,20 @@ def normalize_lesson_payload(tool_result: dict) -> dict:
     transcription = tool_result.get("transcription", "")
     text = tool_result.get("response", "")
 
-    # Extract lesson fields if present
+    # Extract lesson fields if ANY lesson field is present
+    lesson_fields = ["english_coaching", "mandarin_text", "pinyin", "meaning", "speech_text"]
     lesson = {}
-    if "english_coaching" in tool_result:
+    if any(field in tool_result for field in lesson_fields):
+        # Sanitize: strip LiteRT tool wrapper artifacts (<|"|>) from all fields
+        strip = lambda s: s.replace('<|"|>', "").strip()
         lesson = {
-            "english_coaching": tool_result.get("english_coaching", ""),
-            "mandarin_text": tool_result.get("mandarin_text", ""),
-            "pinyin": tool_result.get("pinyin", ""),
-            "meaning": tool_result.get("meaning", ""),
-            "pronunciation_tip": tool_result.get("pronunciation_tip", ""),
-            "repeat_prompt": tool_result.get("repeat_prompt", ""),
-            "speech_text": tool_result.get("speech_text", ""),
+            "english_coaching": strip(tool_result.get("english_coaching", "")),
+            "mandarin_text": strip(tool_result.get("mandarin_text", "")),
+            "pinyin": strip(tool_result.get("pinyin", "")),
+            "meaning": strip(tool_result.get("meaning", "")),
+            "pronunciation_tip": strip(tool_result.get("pronunciation_tip", "")),
+            "repeat_prompt": strip(tool_result.get("repeat_prompt", "")),
+            "speech_text": strip(tool_result.get("speech_text", "")),
         }
 
     return {
