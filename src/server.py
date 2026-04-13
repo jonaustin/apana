@@ -136,11 +136,12 @@ def select_speech_text(lesson: dict | None, fallback_text: str) -> str:
         fallback_text: Fallback text if no lesson or speech_text.
 
     Returns:
-        Text string to send to TTS.
+        Text string to send to TTS. Never returns empty string.
     """
     if lesson and lesson.get("speech_text"):
         return lesson["speech_text"]
-    return fallback_text
+    # Always return non-empty string - fallback_text guaranteed non-empty by caller
+    return fallback_text if fallback_text.strip() else "..."
 
 
 @app.get("/")
