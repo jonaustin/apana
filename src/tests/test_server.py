@@ -1,53 +1,18 @@
 """Tests for server helpers - Mandarin tutor rollout."""
 
-import pytest
+import sys
+from pathlib import Path
 
-# Import helpers directly - these don't need the full server dependencies
-# Inline the functions for testing to avoid import issues
-import re
+# Import production functions directly - test real implementation
+src_dir = Path(__file__).parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
-SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
-CHINESE_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?。！？])')
-
-
-def split_sentences(text: str, include_chinese: bool = True) -> list[str]:
-    """Split text into sentences for streaming TTS."""
-    if include_chinese:
-        parts = CHINESE_SENTENCE_SPLIT_RE.split(text.strip())
-    else:
-        parts = SENTENCE_SPLIT_RE.split(text.strip())
-    return [s.strip() for s in parts if s.strip()]
-
-
-def normalize_lesson_payload(tool_result: dict) -> dict:
-    """Normalize tool output into a stable lesson payload."""
-    transcription = tool_result.get("transcription", "")
-    text = tool_result.get("response", "")
-
-    lesson = {}
-    if "english_coaching" in tool_result:
-        lesson = {
-            "english_coaching": tool_result.get("english_coaching", ""),
-            "mandarin_text": tool_result.get("mandarin_text", ""),
-            "pinyin": tool_result.get("pinyin", ""),
-            "meaning": tool_result.get("meaning", ""),
-            "pronunciation_tip": tool_result.get("pronunciation_tip", ""),
-            "repeat_prompt": tool_result.get("repeat_prompt", ""),
-            "speech_text": tool_result.get("speech_text", ""),
-        }
-
-    return {
-        "text": text,
-        "transcription": transcription,
-        "lesson": lesson if lesson else None,
-    }
-
-
-def select_speech_text(lesson: dict | None, fallback_text: str) -> str:
-    """Select the text to send to TTS."""
-    if lesson and lesson.get("speech_text"):
-        return lesson["speech_text"]
-    return fallback_text
+from server import (
+    split_sentences,
+    normalize_lesson_payload,
+    select_speech_text,
+)
 
 
 class TestSplitSentences:
@@ -161,6 +126,35 @@ class TestNormalizeLessonPayload:
 
         assert result["transcription"] == "User spoke Mandarin"
 
+    def test_lesson_created_with_only_speech_text(self):
+        """Lesson payload created when speech_text present without english_coaching."""
+        tool_result = {
+            "transcription": "What is this?",
+            "response": "This is hello.",
+            "speech_text": "你好",
+            "mandarin_text": "你好",
+            "pinyin": "nǐ hǎo",
+            "meaning": "hello",
+        }
+        result = normalize_lesson_payload(tool_result)
+
+        assert result["lesson"] is not None
+        assert result["lesson"]["speech_text"] == "你好"
+        assert result["lesson"]["english_coaching"] == ""
+
+    def test_lesson_sanitizes_wrapper_artifacts(self):
+        """Lesson fields strip LiteRT tool wrapper artifacts (<|\"|>)."""
+        tool_result = {
+            "transcription": "User said <|\"|>hello",
+            "response": "Response",
+            "speech_text": "<|\"|>你好<|\"|>",
+            "mandarin_text": "<|\"|>你好",
+        }
+        result = normalize_lesson_payload(tool_result)
+
+        assert result["lesson"]["speech_text"] == "你好"
+        assert result["lesson"]["mandarin_text"] == "你好"
+
 
 class TestSelectSpeechText:
     """Tests for the select_speech_text helper."""
@@ -181,7 +175,7 @@ class TestSelectSpeechText:
 
     def test_never_returns_empty_string(self):
         """Always returns non-empty string."""
-        # Both lesson and fallback empty
+        # Both lesson and fallback empty - uses ellipsis as fallback
         lesson = {"speech_text": ""}
         result = select_speech_text(lesson, "")
-        assert result == ""  # Edge case: both are empty
+        assert result == "..."
