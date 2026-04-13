@@ -46,6 +46,17 @@ SYSTEM_PROMPT = (
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 CHINESE_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?。！？])')
 
+# Mandarin TTS settings (validated in benchmarks/benchmark_tts.py)
+MANDARIN_VOICE = os.environ.get("TTS_VOICE", "zf_xiaoyi")
+MANDARIN_SPEED = float(os.environ.get("TTS_SPEED", "0.9"))
+DEFAULT_VOICE = "af_heart"
+DEFAULT_SPEED = 1.1
+
+
+def _has_chinese(text: str) -> bool:
+    """Return True if text contains any CJK Unified Ideographs."""
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
+
 engine = None
 tts_backend = None
 
@@ -312,7 +323,11 @@ async def websocket_endpoint(ws: WebSocket):
 
                 # Generate audio for this sentence
                 pcm = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda s=sentence: tts_backend.generate(s)
+                    None, lambda s=sentence: tts_backend.generate(
+                        s,
+                        voice=MANDARIN_VOICE if _has_chinese(s) else DEFAULT_VOICE,
+                        speed=MANDARIN_SPEED if _has_chinese(s) else DEFAULT_SPEED,
+                    )
                 )
 
                 if interrupted.is_set():

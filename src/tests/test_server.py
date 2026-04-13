@@ -12,6 +12,7 @@ from server import (
     split_sentences,
     normalize_lesson_payload,
     select_speech_text,
+    _has_chinese,
 )
 
 
@@ -179,3 +180,26 @@ class TestSelectSpeechText:
         lesson = {"speech_text": ""}
         result = select_speech_text(lesson, "")
         assert result == "..."
+
+
+class TestHasChinese:
+    """Tests for the _has_chinese helper."""
+
+    def test_chinese_characters(self):
+        assert _has_chinese("你好") is True
+
+    def test_mixed_text(self):
+        assert _has_chinese("Hello 你好") is True
+
+    def test_english_only(self):
+        assert _has_chinese("Hello world") is False
+
+    def test_pinyin_only(self):
+        assert _has_chinese("nǐ hǎo") is False
+
+    def test_empty_string(self):
+        assert _has_chinese("") is False
+
+    def test_chinese_punctuation_only(self):
+        """Chinese punctuation without ideographs is not Chinese text."""
+        assert _has_chinese("。！？") is False
