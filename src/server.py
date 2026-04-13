@@ -32,10 +32,15 @@ def resolve_model_path() -> str:
 
 MODEL_PATH = resolve_model_path()
 SYSTEM_PROMPT = (
-    "You are a friendly, conversational AI assistant. The user is talking to you "
-    "through a microphone and showing you their camera. "
-    "You MUST always use the respond_to_user tool to reply. "
-    "First transcribe exactly what the user said, then write your response."
+    "You are a beginner Mandarin tutor teaching English-speaking users. "
+    "The user is talking to you through a microphone and showing you their camera. "
+    "You MUST always use the respond_to_user tool to reply every turn. "
+    "Your rules: stay mostly in English, teach at most one or two new Mandarin items per turn, "
+    "always include pinyin for new Mandarin text, prefer short repeatable examples, "
+    "ask the learner to repeat often, and avoid claiming precise pronunciation scoring. "
+    "Use this exact format: transcription='what the user said', response='your response', "
+    "english_coaching='brief English instruction', mandarin_text='Mandarin characters', "
+    "pinyin='romanized pinyin', meaning='gloss in English', speech_text='exact text for TTS'."
 )
 
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
@@ -229,19 +234,29 @@ async def websocket_endpoint(ws: WebSocket):
                 print("Interrupted after LLM, skipping response")
                 continue
 
+            # Normalize the tool output into a lesson payload
+            normalized = normalize_lesson_payload(tool_result)
+            lesson = normalized.get("lesson")
+
+            # Build the WebSocket reply with optional lesson payload
             reply = {"type": "text", "text": text_response, "llm_time": round(llm_time, 2)}
             if transcription:
                 reply["transcription"] = transcription
+            if lesson:
+                reply["lesson"] = lesson
             await ws.send_text(json.dumps(reply))
 
             if interrupted.is_set():
                 print("Interrupted before TTS, skipping audio")
                 continue
 
+            # Select the text for TTS: prefer lesson.speech_text, fallback to text_response
+            speech_text = select_speech_text(lesson, text_response)
+
             # Streaming TTS: split into sentences and send chunks progressively
-            sentences = split_sentences(text_response)
+            sentences = split_sentences(speech_text)
             if not sentences:
-                sentences = [text_response]
+                sentences = [speech_text]
 
             tts_start = time.time()
 
