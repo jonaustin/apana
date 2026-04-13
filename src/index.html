@@ -327,6 +327,57 @@
     letter-spacing: 0.02em;
   }
 
+  /* ── Lesson card ── */
+  .lesson-card {
+    background: var(--c-surface);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .lesson-card .coaching {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--c-text);
+    margin-bottom: 12px;
+  }
+
+  .lesson-card .phrase {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--c-text-bright);
+    margin-bottom: 6px;
+  }
+
+  .lesson-card .pinyin {
+    font-size: 14px;
+    color: var(--c-speak);
+    margin-bottom: 4px;
+  }
+
+  .lesson-card .meaning {
+    font-size: 13px;
+    color: var(--c-text-dim);
+    margin-bottom: 8px;
+  }
+
+  .lesson-card .tip {
+    font-size: 12px;
+    color: var(--c-text-dim);
+    padding: 8px 10px;
+    background: rgba(129,140,248,0.08);
+    border-radius: 6px;
+    margin-bottom: 6px;
+  }
+
+  .lesson-card .repeat {
+    font-size: 12px;
+    color: var(--c-listen);
+    font-weight: 500;
+  }
+
   .loading-dots {
     display: inline-flex;
     gap: 4px;
@@ -631,6 +682,10 @@ function connect() {
           lastUserMsg.innerHTML = `${msg.transcription}${meta ? meta.outerHTML : ''}`;
         }
       }
+      // Render lesson card if present, then always add the assistant response text
+      if (msg.lesson) {
+        addLessonCard(msg.lesson);
+      }
       addMessage('assistant', msg.text, `LLM ${msg.llm_time}s`);
     } else if (msg.type === 'audio_start') {
       if (ignoreIncomingAudio) return;
@@ -815,6 +870,77 @@ function addMessage(role, text, meta) {
   div.className = `msg ${role}`;
   div.innerHTML = `${text}${meta ? `<div class="meta">${meta}</div>` : ''}`;
   messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function addLessonCard(lesson, meta) {
+  // Create the assistant message wrapper (for timing metadata compatibility)
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg assistant';
+
+  // Create the lesson card
+  const card = document.createElement('div');
+  card.className = 'lesson-card';
+
+  // Coaching text (required)
+  if (lesson.english_coaching) {
+    const coaching = document.createElement('div');
+    coaching.className = 'coaching';
+    coaching.textContent = lesson.english_coaching;
+    card.appendChild(coaching);
+  }
+
+  // Mandarin phrase (required)
+  if (lesson.mandarin_text) {
+    const phrase = document.createElement('div');
+    phrase.className = 'phrase';
+    phrase.textContent = lesson.mandarin_text;
+    card.appendChild(phrase);
+  }
+
+  // Pinyin (required)
+  if (lesson.pinyin) {
+    const pinyin = document.createElement('div');
+    pinyin.className = 'pinyin';
+    pinyin.textContent = lesson.pinyin;
+    card.appendChild(pinyin);
+  }
+
+  // Meaning (required)
+  if (lesson.meaning) {
+    const meaning = document.createElement('div');
+    meaning.className = 'meaning';
+    meaning.textContent = lesson.meaning;
+    card.appendChild(meaning);
+  }
+
+  // Pronunciation tip (optional)
+  if (lesson.pronunciation_tip) {
+    const tip = document.createElement('div');
+    tip.className = 'tip';
+    tip.textContent = lesson.pronunciation_tip;
+    card.appendChild(tip);
+  }
+
+  // Repeat prompt (optional)
+  if (lesson.repeat_prompt) {
+    const repeat = document.createElement('div');
+    repeat.className = 'repeat';
+    repeat.textContent = lesson.repeat_prompt;
+    card.appendChild(repeat);
+  }
+
+  msgDiv.appendChild(card);
+
+  // Add timing metadata (same pattern as addMessage)
+  if (meta) {
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'meta';
+    metaDiv.textContent = meta;
+    msgDiv.appendChild(metaDiv);
+  }
+
+  messagesDiv.appendChild(msgDiv);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
