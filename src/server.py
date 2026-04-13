@@ -152,15 +152,46 @@ async def websocket_endpoint(ws: WebSocket):
     # Per-connection tool state captured via closure
     tool_result = {}
 
-    def respond_to_user(transcription: str, response: str) -> str:
+    def respond_to_user(
+        transcription: str,
+        response: str,
+        english_coaching: str = "",
+        mandarin_text: str = "",
+        pinyin: str = "",
+        meaning: str = "",
+        pronunciation_tip: str = "",
+        repeat_prompt: str = "",
+        speech_text: str = "",
+    ) -> str:
         """Respond to the user's voice message.
 
         Args:
             transcription: Exact transcription of what the user said in the audio.
             response: Your conversational response to the user. Keep it to 1-4 short sentences.
+            english_coaching: Brief English instruction or encouragement.
+            mandarin_text: The Mandarin characters to learn.
+            pinyin: Romanized pinyin for the Mandarin text.
+            meaning: Gloss in English.
+            pronunciation_tip: Optional pronunciation guidance.
+            repeat_prompt: Optional prompt to repeat the phrase.
+            speech_text: Exact text to send to TTS.
         """
         tool_result["transcription"] = transcription
         tool_result["response"] = response
+        if english_coaching:
+            tool_result["english_coaching"] = english_coaching
+        if mandarin_text:
+            tool_result["mandarin_text"] = mandarin_text
+        if pinyin:
+            tool_result["pinyin"] = pinyin
+        if meaning:
+            tool_result["meaning"] = meaning
+        if pronunciation_tip:
+            tool_result["pronunciation_tip"] = pronunciation_tip
+        if repeat_prompt:
+            tool_result["repeat_prompt"] = repeat_prompt
+        if speech_text:
+            tool_result["speech_text"] = speech_text
         return "OK"
 
     conversation = engine.create_conversation(
