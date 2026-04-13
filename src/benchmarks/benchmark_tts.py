@@ -155,7 +155,8 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
             pcm, sr = pcm_sample
             import os
             os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, f"mlx-audio-{label}.wav")
+            mode_suffix = "-mandarin" if mandarin else "-english"
+            output_path = os.path.join(output_dir, f"mlx-audio{mode_suffix}-{label}.wav")
             with wave.open(output_path, "wb") as wf:
                 wf.setnchannels(1)
                 wf.setsampwidth(2)  # 16-bit
