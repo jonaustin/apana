@@ -160,7 +160,7 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
                 wf.setnchannels(1)
                 wf.setsampwidth(2)  # 16-bit
                 wf.setframerate(sr)
-                wf.writeframes((pcm * 32767).astype(np.int16).tobytes())
+                wf.writeframes((np.clip(pcm * 32767, -32768, 32767).astype(np.int16)).tobytes())
             print(f"  Saved: {output_path}")
 
         results[label] = {
