@@ -1,61 +1,18 @@
 """Tests for server helpers - Mandarin tutor rollout."""
 
-import pytest
+import sys
+from pathlib import Path
 
-# Import helpers directly - these don't need the full server dependencies
-# Inline the functions for testing to avoid import issues
-import re
+# Import production functions directly - test real implementation
+src_dir = Path(__file__).parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
-SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
-CHINESE_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?。！？])')
-
-
-def split_sentences(text: str, include_chinese: bool = True) -> list[str]:
-    """Split text into sentences for streaming TTS."""
-    if include_chinese:
-        parts = CHINESE_SENTENCE_SPLIT_RE.split(text.strip())
-    else:
-        parts = SENTENCE_SPLIT_RE.split(text.strip())
-    return [s.strip() for s in parts if s.strip()]
-
-
-def normalize_lesson_payload(tool_result: dict) -> dict:
-    """Normalize tool output into a stable lesson payload (inline for testing)."""
-    transcription = tool_result.get("transcription", "")
-    text = tool_result.get("response", "")
-
-    # Extract lesson fields if ANY lesson field is present
-    lesson_fields = [
-        "english_coaching", "mandarin_text", "pinyin", "meaning",
-        "speech_text", "pronunciation_tip", "repeat_prompt",
-    ]
-    lesson = {}
-    if any(field in tool_result for field in lesson_fields):
-        # Sanitize: strip LiteRT tool wrapper artifacts (<|"|>) from all fields
-        strip = lambda s: s.replace('<|"|>', "").strip()
-        lesson = {
-            "english_coaching": strip(tool_result.get("english_coaching", "")),
-            "mandarin_text": strip(tool_result.get("mandarin_text", "")),
-            "pinyin": strip(tool_result.get("pinyin", "")),
-            "meaning": strip(tool_result.get("meaning", "")),
-            "pronunciation_tip": strip(tool_result.get("pronunciation_tip", "")),
-            "repeat_prompt": strip(tool_result.get("repeat_prompt", "")),
-            "speech_text": strip(tool_result.get("speech_text", "")),
-        }
-
-    return {
-        "text": text,
-        "transcription": transcription,
-        "lesson": lesson if lesson else None,
-    }
-
-
-def select_speech_text(lesson: dict | None, fallback_text: str) -> str:
-    """Select the text to send to TTS (inline for testing)."""
-    if lesson and lesson.get("speech_text"):
-        return lesson["speech_text"]
-    # Never return empty string - use fallback or ellipsis
-    return fallback_text if fallback_text.strip() else "..."
+from server import (
+    split_sentences,
+    normalize_lesson_payload,
+    select_speech_text,
+)
 
 
 class TestSplitSentences:
