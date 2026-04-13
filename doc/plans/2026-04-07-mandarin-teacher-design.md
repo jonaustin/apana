@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+**Purpose:** Teach beginner Mandarin to English-speaking users through short spoken examples with pinyin and translation, entirely on-device.
+
 **Goal:** Turn Parlor into a good beginner Mandarin tutor MVP that stays on-device, teaches a small amount of Mandarin at a time, and provides trustworthy spoken examples with clear on-screen coaching.
 
 **Architecture:** Keep the current FastAPI WebSocket loop, Gemma conversation engine, and browser VAD/playback flow. Add a structured lesson payload on top of the existing `text` message contract, choose one credible local Mandarin speech path, and keep the frontend compatible with plain-text fallback while rendering a richer lesson card when structured fields are present.

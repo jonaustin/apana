@@ -60,7 +60,11 @@ _Add your build and test commands here_
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+**Apana (Parlor)** teaches beginner Mandarin to English-speaking users through short spoken examples with pinyin and translation, entirely on-device.
+
+**Stack:** FastAPI WebSocket server, Gemma 4 E2B via LiteRT-LM, local TTS (mlx-audio on macOS, kokoro-onnx for English on Linux), browser VAD/playback, plain HTML/CSS/JS frontend.
+
+**Design doc:** `doc/plans/2026-04-07-mandarin-teacher-design.md`
 
 ## Conventions & Patterns
 
