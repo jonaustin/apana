@@ -48,7 +48,8 @@ MANDARIN_TEXT_SET = {
     "long": "我叫小明，请再说一次，很高兴认识你",
 }
 
-# Recommended voice for Mandarin (Kokoro ONNX uses zf_ voices)
+# Recommended voice for Mandarin (mlx-audio Kokoro model uses zf_ voices)
+# Note: kokoro-onnx does NOT support Mandarin (espeak-ng only supports en-us/en-gb)
 MANDARIN_VOICE = "zf_xiaoyi"
 
 # Recommended speed for beginner learners (slower is clearer)

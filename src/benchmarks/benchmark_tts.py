@@ -95,19 +95,6 @@ def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
             if run_idx == 0:
                 pcm_sample = (pcm, sr)
 
-        # Save audio file for Mandarin mode
-        if mandarin and output_dir and pcm_sample:
-            pcm, sr = pcm_sample
-            import os
-            os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, f"kokoro-onnx-{label}.wav")
-            with wave.open(output_path, "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)  # 16-bit
-                wf.setframerate(sr)
-                wf.writeframes((pcm * 32767).astype(np.int16).tobytes())
-            print(f"  Saved: {output_path}")
-
         results[label] = {
             "times": times,
             "mean": statistics.mean(times),
@@ -130,10 +117,8 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
     model = load_model("mlx-community/Kokoro-82M-bf16")
     sr = model.sample_rate
     # Warmup to trigger pipeline init
-    warmup_text = "Hello" if not mandarin else "你好"
-    warmup_voice = VOICE if not mandarin else MANDARIN_VOICE
-    warmup_speed = SPEED if not mandarin else MANDARIN_SPEED
-    warmup_lang = "a" if not mandarin else "z"  # 'a'=English, 'z'=Mandarin
+    _, warmup_voice, warmup_speed, warmup_lang = _get_config(mandarin)
+    warmup_text = SENTENCES["short"] if not mandarin else MANDARIN_TEXT_SET["short"]
     list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
     print(f"  Loaded in {time.time() - t0:.2f}s (sample_rate={sr})")
 
@@ -199,10 +184,8 @@ def benchmark_mlx_audio_streaming(mandarin=False):
     model = load_model("mlx-community/Kokoro-82M-bf16")
 
     # Warmup
-    warmup_text = "Hello" if not mandarin else "你好"
-    warmup_voice = VOICE if not mandarin else MANDARIN_VOICE
-    warmup_speed = SPEED if not mandarin else MANDARIN_SPEED
-    warmup_lang = "a" if not mandarin else "z"
+    _, warmup_voice, warmup_speed, warmup_lang = _get_config(mandarin)
+    warmup_text = SENTENCES["short"] if not mandarin else MANDARIN_TEXT_SET["short"]
     list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
 
     text_set, voice, speed, lang_code = _get_config(mandarin)
@@ -229,7 +212,7 @@ def benchmark_mlx_audio_streaming(mandarin=False):
                 n_chunks += 1
 
             # Check for empty streaming output (Issue 3)
-            if n_chunks == 0 and mandarin:
+            if n_chunks == 0:
                 raise RuntimeError(f"Streaming backend produced no chunks for label='{label}', voice='{voice}'.")
 
             total_times.append(time.time() - t0)
@@ -323,8 +306,12 @@ if __name__ == "__main__":
 
     text_set = MANDARIN_TEXT_SET if mandarin else None
 
-    onnx_results = benchmark_kokoro_onnx(mandarin=mandarin, output_dir=output_dir)
-    print_results("kokoro-onnx (ONNX Runtime, CPU)", onnx_results, text_set=text_set, phrases=MANDARIN_PHRASES)
+    # kokoro-onnx does not support Mandarin (espeak-ng only supports en-us/en-gb)
+    if not mandarin:
+        onnx_results = benchmark_kokoro_onnx(mandarin=mandarin, output_dir=output_dir)
+        print_results("kokoro-onnx (ONNX Runtime, CPU)", onnx_results, text_set=text_set, phrases=MANDARIN_PHRASES)
+    else:
+        onnx_results = None
 
     if is_apple:
         mlx_results = benchmark_mlx_audio(mandarin=mandarin, output_dir=output_dir)
@@ -334,7 +321,7 @@ if __name__ == "__main__":
         print_streaming_results(streaming_results, text_set=text_set)
 
         # Comparison (only for English mode - kokoro-onnx doesn't support Mandarin)
-        if not mandarin:
+        if onnx_results:
             print(f"\n{'=' * 60}")
             print(f"  Comparison: speedup of mlx-audio over kokoro-onnx")
             print(f"{'=' * 60}")
@@ -343,11 +330,6 @@ if __name__ == "__main__":
                 mlx_mean = mlx_results[label]["mean"]
                 speedup = onnx_mean / mlx_mean
                 print(f"  [{label}]  {onnx_mean*1000:.0f}ms -> {mlx_mean*1000:.0f}ms  ({speedup:.2f}x {'faster' if speedup > 1 else 'slower'})")
-        else:
-            print(f"\n{'=' * 60}")
-            print(f"  Note: kokoro-onnx does not support Mandarin (espeak-ng only supports en-us/en-gb)")
-            print(f"  Only mlx-audio results shown above for Mandarin mode.")
-            print(f"{'=' * 60}")
 
         # Go/No-Go Gate for Mandarin
         if mandarin:
