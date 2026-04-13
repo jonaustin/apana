@@ -679,7 +679,14 @@ function connect() {
         const lastUserMsg = userMsgs[userMsgs.length - 1];
         if (lastUserMsg) {
           const meta = lastUserMsg.querySelector('.meta');
-          lastUserMsg.innerHTML = `${msg.transcription}${meta ? meta.outerHTML : ''}`;
+          // Replace text content, preserve meta element
+          const textNode = lastUserMsg.firstChild;
+          if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+            textNode.textContent = msg.transcription;
+          } else {
+            const tn = document.createTextNode(msg.transcription);
+            lastUserMsg.insertBefore(tn, meta);
+          }
         }
       }
       // Render lesson card if present, then always add the assistant response text
@@ -868,7 +875,19 @@ function queueAudioChunk(base64Pcm) {
 function addMessage(role, text, meta) {
   const div = document.createElement('div');
   div.className = `msg ${role}`;
-  div.innerHTML = `${text}${meta ? `<div class="meta">${meta}</div>` : ''}`;
+
+  // Add text content safely
+  const textNode = document.createTextNode(text);
+  div.appendChild(textNode);
+
+  // Add metadata if present
+  if (meta) {
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'meta';
+    metaDiv.textContent = meta;
+    div.appendChild(metaDiv);
+  }
+
   messagesDiv.appendChild(div);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
