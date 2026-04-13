@@ -50,12 +50,15 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+# Run tests
+uv run pytest src/tests/
+
+# Run Mandarin TTS benchmark
+uv run python src/benchmarks/benchmark_tts.py --mandarin --output /tmp/tts-validation
+
+# Run English TTS benchmark
+uv run python src/benchmarks/benchmark_tts.py
 ```
 
 ## Architecture Overview

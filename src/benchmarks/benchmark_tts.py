@@ -4,7 +4,19 @@ import platform
 import sys
 import time
 import statistics
+import wave
 import numpy as np
+
+
+def _get_config(mandarin: bool):
+    """Get configuration based on mode.
+
+    Returns tuple of (text_set, voice, speed, lang_code).
+    """
+    if mandarin:
+        return (MANDARIN_TEXT_SET, MANDARIN_VOICE, MANDARIN_SPEED, "z")
+    return (SENTENCES, VOICE, SPEED, "a")
+
 
 # Test sentences of varying length
 SENTENCES = {
@@ -24,11 +36,30 @@ SPEED = 1.1
 WARMUP = 2
 RUNS = 5
 
+# Mandarin phrases for TTS validation
+try:
+    from .mandarin_phrases import MANDARIN_PHRASES, MANDARIN_TEXT_SET, MANDARIN_VOICE, MANDARIN_SPEED
+except ImportError:
+    # Fallback for when run as script (python benchmark_tts.py)
+    from mandarin_phrases import MANDARIN_PHRASES, MANDARIN_TEXT_SET, MANDARIN_VOICE, MANDARIN_SPEED
 
-def benchmark_kokoro_onnx():
-    """Benchmark kokoro-onnx (ONNX Runtime, CPU)."""
+
+def benchmark_kokoro_onnx(mandarin=False, output_dir=None):
+    """Benchmark kokoro-onnx (ONNX Runtime, CPU).
+
+    Note: kokoro-onnx only supports English (en-us/en-gb). Mandarin mode is not
+    supported because the underlying espeak-ng phonemizer does not have Chinese
+    language support. Passing lang='zh-cn' will produce garbage audio.
+    """
     import kokoro_onnx
     from huggingface_hub import hf_hub_download
+
+    if mandarin:
+        raise RuntimeError(
+            "kokoro-onnx does not support Mandarin. "
+            "kokoro-onnx uses espeak-ng for phonemization, which only supports en-us/en-gb. "
+            "For Mandarin TTS benchmarking, use mlx-audio only."
+        )
 
     model_path = hf_hub_download("fastrtc/kokoro-onnx", "kokoro-v1.0.onnx")
     voices_path = hf_hub_download("fastrtc/kokoro-onnx", "voices-v1.0.bin")
@@ -38,21 +69,31 @@ def benchmark_kokoro_onnx():
     tts = kokoro_onnx.Kokoro(model_path, voices_path)
     print(f"  Loaded in {time.time() - t0:.2f}s")
 
+    # kokoro-onnx only supports English
+    text_set = SENTENCES
+    voice = VOICE
+    speed = SPEED
+    lang_code = "en-us"
+
     results = {}
-    for label, text in SENTENCES.items():
+    for label, text in text_set.items():
         # Warmup
         for _ in range(WARMUP):
-            tts.create(text, voice=VOICE, speed=SPEED)
+            tts.create(text, voice=voice, speed=speed, lang=lang_code, is_phonemes=False)
 
         # Timed runs
         times = []
         audio_duration = None
-        for _ in range(RUNS):
+        pcm_sample = None
+        for run_idx in range(RUNS):
             t0 = time.time()
-            pcm, sr = tts.create(text, voice=VOICE, speed=SPEED)
+            pcm, sr = tts.create(text, voice=voice, speed=speed, lang=lang_code, is_phonemes=False)
             elapsed = time.time() - t0
             times.append(elapsed)
             audio_duration = len(pcm) / sr
+            # Save first run for output
+            if run_idx == 0:
+                pcm_sample = (pcm, sr)
 
         results[label] = {
             "times": times,
@@ -67,7 +108,7 @@ def benchmark_kokoro_onnx():
     return results
 
 
-def benchmark_mlx_audio():
+def benchmark_mlx_audio(mandarin=False, output_dir=None):
     """Benchmark mlx-audio (MLX, Apple GPU)."""
     from mlx_audio.tts.generate import load_model
 
@@ -76,25 +117,52 @@ def benchmark_mlx_audio():
     model = load_model("mlx-community/Kokoro-82M-bf16")
     sr = model.sample_rate
     # Warmup to trigger pipeline init
-    list(model.generate(text="Hello", voice=VOICE, speed=SPEED))
+    _, warmup_voice, warmup_speed, warmup_lang = _get_config(mandarin)
+    warmup_text = SENTENCES["short"] if not mandarin else MANDARIN_TEXT_SET["short"]
+    list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
     print(f"  Loaded in {time.time() - t0:.2f}s (sample_rate={sr})")
 
+    text_set, voice, speed, lang_code = _get_config(mandarin)
+
     results = {}
-    for label, text in SENTENCES.items():
+    for label, text in text_set.items():
         # Warmup
         for _ in range(WARMUP):
-            list(model.generate(text=text, voice=VOICE, speed=SPEED))
+            list(model.generate(text=text, voice=voice, speed=speed, lang_code=lang_code))
 
         # Timed runs
         times = []
         audio_duration = None
-        for _ in range(RUNS):
+        pcm_sample = None
+        for run_idx in range(RUNS):
             t0 = time.time()
-            gen_results = list(model.generate(text=text, voice=VOICE, speed=SPEED))
+            gen_results = list(model.generate(text=text, voice=voice, speed=speed, lang_code=lang_code))
             elapsed = time.time() - t0
             times.append(elapsed)
+
+            # Check for empty output (Issue 3: guard against no audio)
+            if not gen_results:
+                raise RuntimeError(f"Backend produced no audio for label='{label}', voice='{voice}'. TTS backend may be misconfigured.")
+
             pcm = np.concatenate([np.array(r.audio) for r in gen_results])
             audio_duration = len(pcm) / sr
+            # Save first run for output
+            if run_idx == 0:
+                pcm_sample = (pcm, sr)
+
+        # Save audio file if output_dir specified
+        if output_dir and pcm_sample:
+            pcm, sr = pcm_sample
+            import os
+            os.makedirs(output_dir, exist_ok=True)
+            mode_suffix = "-mandarin" if mandarin else "-english"
+            output_path = os.path.join(output_dir, f"mlx-audio{mode_suffix}-{label}.wav")
+            with wave.open(output_path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)  # 16-bit
+                wf.setframerate(sr)
+                wf.writeframes((np.clip(pcm * 32767, -32768, 32767).astype(np.int16)).tobytes())
+            print(f"  Saved: {output_path}")
 
         results[label] = {
             "times": times,
@@ -109,7 +177,7 @@ def benchmark_mlx_audio():
     return results
 
 
-def benchmark_mlx_audio_streaming():
+def benchmark_mlx_audio_streaming(mandarin=False):
     """Benchmark mlx-audio streaming: time-to-first-chunk on long text."""
     from mlx_audio.tts.generate import load_model
 
@@ -117,14 +185,19 @@ def benchmark_mlx_audio_streaming():
     model = load_model("mlx-community/Kokoro-82M-bf16")
 
     # Warmup
-    list(model.generate(text="Hello", voice=VOICE, speed=SPEED))
+    _, warmup_voice, warmup_speed, warmup_lang = _get_config(mandarin)
+    warmup_text = SENTENCES["short"] if not mandarin else MANDARIN_TEXT_SET["short"]
+    list(model.generate(text=warmup_text, voice=warmup_voice, speed=warmup_speed, lang_code=warmup_lang))
+
+    text_set, voice, speed, lang_code = _get_config(mandarin)
 
     results = {}
-    for label, text in SENTENCES.items():
+    for label, text in text_set.items():
         # Warmup streaming
         for _ in range(WARMUP):
-            for r in model.generate(text=text, voice=VOICE, speed=SPEED, stream=True, streaming_interval=1.0):
-                break
+            first_chunk = next(model.generate(text=text, voice=voice, speed=speed, stream=True, streaming_interval=1.0, lang_code=lang_code), None)
+            if first_chunk is None and mandarin:
+                raise RuntimeError(f"Streaming backend produced no chunks for label='{label}', voice='{voice}'.")
 
         ttfc_times = []
         total_times = []
@@ -133,11 +206,16 @@ def benchmark_mlx_audio_streaming():
             t0 = time.time()
             first = True
             n_chunks = 0
-            for r in model.generate(text=text, voice=VOICE, speed=SPEED, stream=True, streaming_interval=1.0):
+            for r in model.generate(text=text, voice=voice, speed=speed, stream=True, streaming_interval=1.0, lang_code=lang_code):
                 if first:
                     ttfc_times.append(time.time() - t0)
                     first = False
                 n_chunks += 1
+
+            # Check for empty streaming output (Issue 3)
+            if n_chunks == 0:
+                raise RuntimeError(f"Streaming backend produced no chunks for label='{label}', voice='{voice}'.")
+
             total_times.append(time.time() - t0)
             chunk_counts.append(n_chunks)
 
@@ -151,13 +229,32 @@ def benchmark_mlx_audio_streaming():
     return results
 
 
-def print_results(name, results):
+def print_results(name, results, text_set=None, phrases=None):
     print(f"\n{'=' * 60}")
     print(f"  {name}")
     print(f"{'=' * 60}")
     for label, r in results.items():
-        text = SENTENCES[label]
-        print(f"\n  [{label}] ({len(text)} chars)")
+        # Determine text and optional metadata
+        if text_set and label in text_set:
+            text = text_set[label]
+            # Try to find metadata from MANDARIN_PHRASES (Issue 4: key mismatch fix)
+            pinyin = ""
+            meaning = ""
+            if phrases:
+                for phrase_key, phrase_data in phrases.items():
+                    # Check if this phrase's text matches the current label's text
+                    if phrase_data.get("text") == text:
+                        pinyin = phrase_data.get("pinyin", "")
+                        meaning = phrase_data.get("meaning", "")
+                        break
+            print(f"\n  [{label}] ({text})")
+            if pinyin:
+                print(f"    Pinyin: {pinyin}")
+            if meaning:
+                print(f"    Meaning: {meaning}")
+        else:
+            text = SENTENCES.get(label, "")
+            print(f"\n  [{label}] ({len(text)} chars)")
         print(f"    Mean:   {r['mean']*1000:7.1f} ms  (+/-{r['stdev']*1000:.1f})")
         print(f"    Min:    {r['min']*1000:7.1f} ms")
         print(f"    Audio:  {r['audio_sec']:7.2f} s")
@@ -165,13 +262,17 @@ def print_results(name, results):
         print(f"    SR:     {r['sample_rate']} Hz")
 
 
-def print_streaming_results(results):
+def print_streaming_results(results, text_set=None):
     print(f"\n{'=' * 60}")
     print(f"  mlx-audio: Streaming Mode")
     print(f"{'=' * 60}")
     for label, r in results.items():
-        text = SENTENCES[label]
-        print(f"\n  [{label}] ({len(text)} chars)")
+        if text_set and label in text_set:
+            text = text_set[label]
+            print(f"\n  [{label}] ({text})")
+        else:
+            text = SENTENCES.get(label, "")
+            print(f"\n  [{label}] ({len(text)} chars)")
         print(f"    TTFC Mean:  {r['ttfc_mean']*1000:7.1f} ms")
         print(f"    TTFC Min:   {r['ttfc_min']*1000:7.1f} ms")
         print(f"    Total Mean: {r['total_mean']*1000:7.1f} ms")
@@ -180,31 +281,72 @@ def print_streaming_results(results):
 
 if __name__ == "__main__":
     is_apple = sys.platform == "darwin" and platform.machine() == "arm64"
+    mandarin = "--mandarin" in sys.argv
+    output_dir = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--output" and i + 1 < len(sys.argv):
+            output_dir = sys.argv[i + 1]
 
     print("=" * 60)
     if is_apple:
         print("  TTS Benchmark: kokoro-onnx vs mlx-audio")
     else:
         print("  TTS Benchmark: kokoro-onnx")
+
+    if mandarin:
+        print("  Mode: MANDARIN PHRASES")
+        print(f"  Voice: {MANDARIN_VOICE}, Speed: {MANDARIN_SPEED}")
+    else:
+        print("  Mode: ENGLISH PHRASES")
+
+    if output_dir:
+        print(f"  Output directory: {output_dir}")
+
     print(f"  Warmup: {WARMUP} runs, Measured: {RUNS} runs")
     print("=" * 60)
 
-    onnx_results = benchmark_kokoro_onnx()
-    print_results("kokoro-onnx (ONNX Runtime, CPU)", onnx_results)
+    text_set = MANDARIN_TEXT_SET if mandarin else None
+
+    # kokoro-onnx does not support Mandarin (espeak-ng only supports en-us/en-gb)
+    if not mandarin:
+        onnx_results = benchmark_kokoro_onnx(mandarin=mandarin, output_dir=output_dir)
+        print_results("kokoro-onnx (ONNX Runtime, CPU)", onnx_results, text_set=text_set, phrases=MANDARIN_PHRASES)
+    else:
+        onnx_results = None
 
     if is_apple:
-        mlx_results = benchmark_mlx_audio()
-        print_results("mlx-audio (MLX, Apple GPU)", mlx_results)
+        mlx_results = benchmark_mlx_audio(mandarin=mandarin, output_dir=output_dir)
+        print_results("mlx-audio (MLX, Apple GPU)", mlx_results, text_set=text_set, phrases=MANDARIN_PHRASES)
 
-        streaming_results = benchmark_mlx_audio_streaming()
-        print_streaming_results(streaming_results)
+        streaming_results = benchmark_mlx_audio_streaming(mandarin=mandarin)
+        print_streaming_results(streaming_results, text_set=text_set)
 
-        # Comparison
-        print(f"\n{'=' * 60}")
-        print(f"  Comparison: speedup of mlx-audio over kokoro-onnx")
-        print(f"{'=' * 60}")
-        for label in SENTENCES:
-            onnx_mean = onnx_results[label]["mean"]
-            mlx_mean = mlx_results[label]["mean"]
-            speedup = onnx_mean / mlx_mean
-            print(f"  [{label}]  {onnx_mean*1000:.0f}ms -> {mlx_mean*1000:.0f}ms  ({speedup:.2f}x {'faster' if speedup > 1 else 'slower'})")
+        # Comparison (only for English mode - kokoro-onnx doesn't support Mandarin)
+        if onnx_results:
+            print(f"\n{'=' * 60}")
+            print(f"  Comparison: speedup of mlx-audio over kokoro-onnx")
+            print(f"{'=' * 60}")
+            for label in SENTENCES:
+                onnx_mean = onnx_results[label]["mean"]
+                mlx_mean = mlx_results[label]["mean"]
+                speedup = onnx_mean / mlx_mean
+                print(f"  [{label}]  {onnx_mean*1000:.0f}ms -> {mlx_mean*1000:.0f}ms  ({speedup:.2f}x {'faster' if speedup > 1 else 'slower'})")
+
+        # Go/No-Go Gate for Mandarin
+        if mandarin:
+            print(f"\n{'=' * 60}")
+            print(f"  MANDARIN TTS VALIDATION: GO/NO-GO GATE")
+            print(f"{'=' * 60}")
+            if output_dir:
+                print(f"\nAudio files saved to: {output_dir}")
+                print("\nManual Listening Check Required:")
+                print("  1. Listen to the generated Mandarin audio files")
+                print("  2. Verify: phrases are intelligible to a Mandarin speaker/learner")
+                print("  3. Verify: pace is slow enough for beginner repetition")
+                print("  4. Verify: no obviously misleading English accent")
+            else:
+                print("\nNo audio files saved (use --output <dir> to save).")
+                print("To validate, run: python src/benchmarks/benchmark_tts.py --mandarin --output /tmp/tts-validation")
+            print("\n  PASS criteria: All conditions above are met")
+            print("  If PASS: Continue with Mandarin teacher MVP rollout")
+            print("  If FAIL: Document blocker, consider alternative TTS backend")
