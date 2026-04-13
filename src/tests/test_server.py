@@ -25,7 +25,10 @@ def normalize_lesson_payload(tool_result: dict) -> dict:
     text = tool_result.get("response", "")
 
     # Extract lesson fields if ANY lesson field is present
-    lesson_fields = ["english_coaching", "mandarin_text", "pinyin", "meaning", "speech_text"]
+    lesson_fields = [
+        "english_coaching", "mandarin_text", "pinyin", "meaning",
+        "speech_text", "pronunciation_tip", "repeat_prompt",
+    ]
     lesson = {}
     if any(field in tool_result for field in lesson_fields):
         # Sanitize: strip LiteRT tool wrapper artifacts (<|"|>) from all fields
