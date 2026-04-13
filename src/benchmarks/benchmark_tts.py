@@ -150,8 +150,8 @@ def benchmark_mlx_audio(mandarin=False, output_dir=None):
             if run_idx == 0:
                 pcm_sample = (pcm, sr)
 
-        # Save audio file for Mandarin mode
-        if mandarin and output_dir and pcm_sample:
+        # Save audio file if output_dir specified
+        if output_dir and pcm_sample:
             pcm, sr = pcm_sample
             import os
             os.makedirs(output_dir, exist_ok=True)
