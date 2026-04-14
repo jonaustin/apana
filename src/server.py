@@ -275,8 +275,13 @@ async def websocket_endpoint(ws: WebSocket):
                 text_response = strip(tool_result.get("response", ""))
                 print(f"LLM ({llm_time:.2f}s) [tool] heard: {transcription!r} → {text_response}")
             else:
-                transcription = None
-                text_response = response["content"][0]["text"]
+                # No tool call: for text-only input, use the incoming text as transcription
+                strip = lambda s: s.replace('<|"|>', "").strip()
+                text_response = strip(response["content"][0].get("text", ""))
+                if msg.get("text"):
+                    transcription = strip(msg.get("text", ""))
+                else:
+                    transcription = None
                 print(f"LLM ({llm_time:.2f}s) [no tool]: {text_response}")
 
             if interrupted.is_set():
