@@ -26,6 +26,7 @@ def resolve_model_path() -> str:
     if path:
         return path
     from huggingface_hub import hf_hub_download
+
     print(f"Downloading {HF_REPO}/{HF_FILENAME} (first run only)...")
     return hf_hub_download(repo_id=HF_REPO, filename=HF_FILENAME)
 
@@ -43,8 +44,8 @@ SYSTEM_PROMPT = (
     "pinyin='romanized pinyin', meaning='gloss in English', speech_text='exact text for TTS'."
 )
 
-SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
-CHINESE_SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?。！？])')
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+CHINESE_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?。！？])")
 
 engine = None
 tts_backend = None
@@ -107,8 +108,13 @@ def normalize_lesson_payload(tool_result: dict) -> dict:
 
     # Extract lesson fields if ANY lesson field is present
     lesson_fields = [
-        "english_coaching", "mandarin_text", "pinyin", "meaning",
-        "speech_text", "pronunciation_tip", "repeat_prompt",
+        "english_coaching",
+        "mandarin_text",
+        "pinyin",
+        "meaning",
+        "speech_text",
+        "pronunciation_tip",
+        "repeat_prompt",
     ]
     lesson = {}
     if any(field in tool_result for field in lesson_fields):
@@ -241,11 +247,26 @@ async def websocket_endpoint(ws: WebSocket):
                 content.append({"type": "image", "blob": msg["image"]})
 
             if msg.get("audio") and msg.get("image"):
-                content.append({"type": "text", "text": "The user just spoke to you (audio) while showing their camera (image). Respond to what they said, referencing what you see if relevant."})
+                content.append(
+                    {
+                        "type": "text",
+                        "text": "The user just spoke to you (audio) while showing their camera (image). Respond to what they said, referencing what you see if relevant.",
+                    }
+                )
             elif msg.get("audio"):
-                content.append({"type": "text", "text": "The user just spoke to you. Respond to what they said."})
+                content.append(
+                    {
+                        "type": "text",
+                        "text": "The user just spoke to you. Respond to what they said.",
+                    }
+                )
             elif msg.get("image"):
-                content.append({"type": "text", "text": "The user is showing you their camera. Describe what you see."})
+                content.append(
+                    {
+                        "type": "text",
+                        "text": "The user is showing you their camera. Describe what you see.",
+                    }
+                )
             else:
                 content.append({"type": "text", "text": msg.get("text", "Hello!")})
 
@@ -253,7 +274,8 @@ async def websocket_endpoint(ws: WebSocket):
             t0 = time.time()
             tool_result.clear()
             response = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: conversation.send_message({"role": "user", "content": content})
+                None,
+                lambda: conversation.send_message({"role": "user", "content": content}),
             )
             llm_time = time.time() - t0
 
@@ -262,7 +284,9 @@ async def websocket_endpoint(ws: WebSocket):
                 strip = lambda s: s.replace('<|"|>', "").strip()
                 transcription = strip(tool_result.get("transcription", ""))
                 text_response = strip(tool_result.get("response", ""))
-                print(f"LLM ({llm_time:.2f}s) [tool] heard: {transcription!r} → {text_response}")
+                print(
+                    f"LLM ({llm_time:.2f}s) [tool] heard: {transcription!r} → {text_response}"
+                )
             else:
                 transcription = None
                 text_response = response["content"][0]["text"]
@@ -277,7 +301,11 @@ async def websocket_endpoint(ws: WebSocket):
             lesson = normalized.get("lesson")
 
             # Build the WebSocket reply with optional lesson payload
-            reply = {"type": "text", "text": text_response, "llm_time": round(llm_time, 2)}
+            reply = {
+                "type": "text",
+                "text": text_response,
+                "llm_time": round(llm_time, 2),
+            }
             if transcription:
                 reply["transcription"] = transcription
             if lesson:
@@ -299,15 +327,19 @@ async def websocket_endpoint(ws: WebSocket):
             tts_start = time.time()
 
             # Signal start of audio stream
-            await ws.send_text(json.dumps({
-                "type": "audio_start",
-                "sample_rate": tts_backend.sample_rate,
-                "sentence_count": len(sentences),
-            }))
+            await ws.send_text(
+                json.dumps(
+                    {
+                        "type": "audio_start",
+                        "sample_rate": tts_backend.sample_rate,
+                        "sentence_count": len(sentences),
+                    }
+                )
+            )
 
             for i, sentence in enumerate(sentences):
                 if interrupted.is_set():
-                    print(f"Interrupted during TTS (sentence {i+1}/{len(sentences)})")
+                    print(f"Interrupted during TTS (sentence {i + 1}/{len(sentences)})")
                     break
 
                 # Generate audio for this sentence
@@ -320,20 +352,28 @@ async def websocket_endpoint(ws: WebSocket):
 
                 # Convert to 16-bit PCM and send as base64
                 pcm_int16 = (pcm * 32767).clip(-32768, 32767).astype(np.int16)
-                await ws.send_text(json.dumps({
-                    "type": "audio_chunk",
-                    "audio": base64.b64encode(pcm_int16.tobytes()).decode(),
-                    "index": i,
-                }))
+                await ws.send_text(
+                    json.dumps(
+                        {
+                            "type": "audio_chunk",
+                            "audio": base64.b64encode(pcm_int16.tobytes()).decode(),
+                            "index": i,
+                        }
+                    )
+                )
 
             tts_time = time.time() - tts_start
             print(f"TTS ({tts_time:.2f}s): {len(sentences)} sentences")
 
             if not interrupted.is_set():
-                await ws.send_text(json.dumps({
-                    "type": "audio_end",
-                    "tts_time": round(tts_time, 2),
-                }))
+                await ws.send_text(
+                    json.dumps(
+                        {
+                            "type": "audio_end",
+                            "tts_time": round(tts_time, 2),
+                        }
+                    )
+                )
 
     except WebSocketDisconnect:
         print("Client disconnected")
@@ -343,5 +383,5 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", "8123"))
+    uvicorn.run(app, host="127.0.0.1", port=port)
