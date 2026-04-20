@@ -10,11 +10,16 @@ import asyncio
 import base64
 import json
 import os
+import sys
 import time
 import wave
 
 import numpy as np
 import websockets
+
+# Allow imports from src/ when running from benchmarks/
+sys.path.insert(0, str(os.path.join(os.path.dirname(__file__), "..")))
+from tts import load as load_tts
 
 
 SERVER_URL = os.environ.get("SERVER_URL", "ws://localhost:8000/ws")
@@ -45,6 +50,20 @@ def make_jpg_b64(width: int = 320, height: int = 240) -> str:
     img = Image.new("RGB", (width, height), color=(100, 150, 200))
     buf = io.BytesIO()
     img.save(buf, format="JPEG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def make_speech_wav_b64(text: str, tts_backend) -> str:
+    """Synthesize speech from text and return as base64 WAV."""
+    pcm = tts_backend.generate(text, voice="af_heart", speed=1.0)
+    pcm_int16 = (pcm * 32767).clip(-32768, 32767).astype(np.int16)
+    import io
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(tts_backend.sample_rate)
+        w.writeframes(pcm_int16.tobytes())
     return base64.b64encode(buf.getvalue()).decode()
 
 
@@ -115,9 +134,13 @@ def print_row(name: str, r: dict):
 
 async def main():
     # Prepare test data
+    print("Preparing TTS for text→audio test inputs...")
+    tts = load_tts()
     audio_2s = make_wav_b64(2.0)
     audio_5s = make_wav_b64(5.0)
     image = make_jpg_b64()
+    speech_hello = make_speech_wav_b64("Hello, nice to meet you!", tts)
+    speech_fact = make_speech_wav_b64("Tell me a fun fact about the ocean.", tts)
 
     # ── Individual turns (new connection each = fresh conversation) ─────
 
@@ -127,7 +150,7 @@ async def main():
     print_header()
 
     tests = [
-        ("Text only", {"text": "Tell me a fun fact about the ocean."}),
+        ("Speech (fact)", {"audio": speech_fact}),
         ("Audio 2s", {"audio": audio_2s}),
         ("Audio 5s", {"audio": audio_5s}),
         ("Image only", {"image": image}),
@@ -170,7 +193,7 @@ async def main():
 
     async with websockets.connect(SERVER_URL) as ws:
         # Tool calling works
-        r = await send_and_receive(ws, {"text": "Hello, nice to meet you!"})
+        r = await send_and_receive(ws, {"audio": speech_hello})
         print(f"  Tool called:        {'PASS' if r['transcription'] else 'FAIL'}")
         print(f"  Has response:       {'PASS' if r['text'] and len(r['text']) > 0 else 'FAIL'}")
         print(f"  No raw delimiters:  {'PASS' if '<|\"|>' not in r['text'] else 'FAIL'}")

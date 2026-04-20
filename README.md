@@ -1,8 +1,8 @@
-# Parlor
+# Apana (Parlor)
 
-On-device, real-time multimodal AI. Have natural voice and vision conversations with an AI that runs entirely on your machine.
+On-device beginner Mandarin tutor. Learn Mandarin through short spoken examples with pinyin and translation, entirely on your machine.
 
-Parlor uses [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B-it) for understanding speech and vision, and [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) for text-to-speech. You talk, show your camera, and it talks back, all locally.
+Apana uses [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B-it) for understanding speech and vision, and [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) for text-to-speech with Mandarin voice support. Ask a question, hear a Mandarin example, see the phrase with pinyin and meaning, and repeat.
 
 https://github.com/user-attachments/assets/cb0ffb2e-f84f-48e7-872c-c5f7b5c6d51f
 
@@ -62,10 +62,12 @@ Models are downloaded automatically on first run (~2.6 GB for Gemma 4 E2B, plus 
 
 ## Configuration
 
-| Variable     | Default                        | Description                                    |
-| ------------ | ------------------------------ | ---------------------------------------------- |
-| `MODEL_PATH` | auto-download from HuggingFace | Path to a local `gemma-4-E2B-it.litertlm` file |
-| `PORT`       | `8000`                         | Server port                                    |
+| Variable     | Default                        | Description                                         |
+| ------------ | ------------------------------ | --------------------------------------------------- |
+| `MODEL_PATH` | auto-download from HuggingFace | Path to a local `gemma-4-E2B-it.litertlm` file      |
+| `PORT`       | `8000`                         | Server port                                         |
+| `TTS_VOICE`  | `zf_xiaoyi`                    | Mandarin TTS voice (Kokoro voice ID)                |
+| `TTS_SPEED`  | `0.9`                          | Mandarin TTS speed (slower is clearer for beginners) |
 
 ## Performance (Apple M3 Pro)
 
@@ -82,13 +84,16 @@ Decode speed: ~83 tokens/sec on GPU (Apple M3 Pro).
 
 ```
 src/
-├── server.py              # FastAPI WebSocket server + Gemma 4 inference
+├── server.py              # FastAPI WebSocket server + Gemma 4 inference + Mandarin tutor
 ├── tts.py                 # Platform-aware TTS (MLX on Mac, ONNX on Linux)
-├── index.html             # Frontend UI (VAD, camera, audio playback)
+├── index.html             # Frontend UI (VAD, camera, audio playback, lesson cards)
 ├── pyproject.toml         # Dependencies
+├── tests/
+│   └── test_server.py     # Backend helper tests
 └── benchmarks/
     ├── bench.py           # End-to-end WebSocket benchmark
-    └── benchmark_tts.py   # TTS backend comparison
+    ├── benchmark_tts.py   # TTS backend comparison (English + Mandarin)
+    └── mandarin_phrases.py # Mandarin phrase fixtures for TTS validation
 ```
 
 ## Acknowledgments
